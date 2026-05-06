@@ -249,7 +249,6 @@ create table if not exists public.chat_messages (
   content jsonb,
   files jsonb,
   annotations jsonb,
-  probe_scores jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -307,8 +306,6 @@ create table if not exists public.tabular_cells (
   content text,
   citations jsonb,
   status text not null default 'pending',
-  probe_scores jsonb,
-  probe_status text,
   created_at timestamptz not null default now()
 );
 
