@@ -13,6 +13,10 @@ import {
 import { completeText } from "../lib/llm";
 import { getUserApiKeys, getUserModelSettings } from "../lib/userSettings";
 import { checkProjectAccess } from "../lib/access";
+import {
+    streamScoreMessages,
+    type ProbeMessage,
+} from "../lib/probe/scorer";
 
 export const chatRouter = Router();
 
@@ -316,11 +320,12 @@ chatRouter.post("/:chatId/generate-title", requireAuth, async (req, res) => {
 // POST /chat — streaming
 chatRouter.post("/", requireAuth, async (req, res) => {
     const userId = res.locals.userId as string;
-    const { messages, chat_id, project_id, model } = req.body as {
+    const { messages, chat_id, project_id, model, enable_thinking } = req.body as {
         messages: ChatMessage[];
         chat_id?: string;
         project_id?: string;
         model?: string;
+        enable_thinking?: boolean;
     };
 
     console.log("[chat/stream] incoming request", {
@@ -450,6 +455,7 @@ chatRouter.post("/", requireAuth, async (req, res) => {
             model,
             apiKeys,
             projectId: project_id ?? null,
+            enableThinking: enable_thinking ?? false,
         });
 
         console.log("[chat/stream] LLM stream finished", {
@@ -458,12 +464,52 @@ chatRouter.post("/", requireAuth, async (req, res) => {
         });
 
         const annotations = extractAnnotations(fullText, docIndex, events);
-        await db.from("chat_messages").insert({
-            chat_id: chatId,
-            role: "assistant",
-            content: events.length ? events : null,
-            annotations: annotations.length ? annotations : null,
-        });
+        const { data: insertedMsg } = await db
+            .from("chat_messages")
+            .insert({
+                chat_id: chatId,
+                role: "assistant",
+                content: events.length ? events : null,
+                annotations: annotations.length ? annotations : null,
+            })
+            .select("id")
+            .single();
+        const insertedMessageId = (insertedMsg?.id as string | undefined) ?? null;
+
+        if (
+            process.env.PROBE_API_URL &&
+            fullText &&
+            insertedMessageId
+        ) {
+            const probeMessages: ProbeMessage[] = [
+                ...(apiMessages as { role: string; content: string | null }[])
+                    .filter((m) => m.content)
+                    .map((m) => ({
+                        role:
+                            m.role === "system"
+                                ? ("system" as const)
+                                : m.role === "assistant"
+                                  ? ("assistant" as const)
+                                  : ("user" as const),
+                        content: m.content as string,
+                    })),
+                { role: "assistant", content: fullText },
+            ];
+            const result = await streamScoreMessages({
+                messages: probeMessages,
+                onScore: (e) => {
+                    write(
+                        `data: ${JSON.stringify({ type: "assistant_score_update", message_id: insertedMessageId, scores: e.scores })}\n\n`,
+                    );
+                },
+            });
+            if (result) {
+                await db
+                    .from("chat_messages")
+                    .update({ probe_scores: result.scores })
+                    .eq("id", insertedMessageId);
+            }
+        }
 
         if (!chatTitle && lastUser?.content) {
             await db

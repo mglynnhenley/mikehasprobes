@@ -2312,8 +2312,9 @@ export async function runLLMStream(params: {
      * generated docs still get persisted, but as standalone documents.
      */
     projectId?: string | null;
+    enableThinking?: boolean;
 }): Promise<{ fullText: string; events: AssistantEvent[] }> {
-    const { apiMessages, docStore, docIndex, userId, db, write, extraTools, workflowStore, tabularStore, buildCitations, model, apiKeys, projectId } = params;
+    const { apiMessages, docStore, docIndex, userId, db, write, extraTools, workflowStore, tabularStore, buildCitations, model, apiKeys, projectId, enableThinking = false } = params;
     const activeTools = extraTools?.length
         ? [...TOOLS, ...WORKFLOW_TOOLS, ...extraTools]
         : [...TOOLS, ...WORKFLOW_TOOLS];
@@ -2416,7 +2417,7 @@ export async function runLLMStream(params: {
         tools: activeTools as OpenAIToolSchema[],
         maxIterations: 10,
         apiKeys,
-        enableThinking: true,
+        enableThinking,
         callbacks: {
             onContentDelta: (delta) => {
                 iterText += delta;

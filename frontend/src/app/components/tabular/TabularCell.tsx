@@ -7,6 +7,8 @@ import { AlertCircle, Expand } from "lucide-react";
 import type { ColumnConfig, TabularCell as TCell } from "../shared/types";
 import { preprocessCitations, type ParsedCitation } from "./citation-utils";
 import { getPillClass } from "./pillUtils";
+import { ProbeBadge } from "./ProbeBadge";
+import { HighlightedSummary } from "./HighlightedSummary";
 
 interface Props {
     cell: TCell;
@@ -220,6 +222,7 @@ export function TabularCell({
                         title={cell.content.flag}
                     />
                 )}
+                <ProbeBadge cell={cell} />
                 <div className="line-clamp-1 w-full min-w-0">
                     <CellMarkdown
                         text={collapsedDisplay}
@@ -243,6 +246,7 @@ export function TabularCell({
                                 title={cell.content.flag}
                             />
                         )}
+                        <ProbeBadge cell={cell} />
                         <CellMarkdown
                             text={processed}
                             citations={citations}
@@ -251,6 +255,7 @@ export function TabularCell({
                             onCitationClick={handleCitationClickInOverlay}
                             onExpand={handleSeeDetails}
                         />
+                        <HighlightedSummary scores={cell.probe_scores} />
                     </div>
                     <div className="px-2 py-1.5 flex items-center justify-end">
                         <button

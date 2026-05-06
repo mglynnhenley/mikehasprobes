@@ -13,6 +13,10 @@ import {
 } from "../lib/chatTools";
 import { getUserApiKeys } from "../lib/userSettings";
 import { checkProjectAccess } from "../lib/access";
+import {
+    streamScoreMessages,
+    type ProbeMessage,
+} from "../lib/probe/scorer";
 
 const PROJECT_SYSTEM_PROMPT_EXTRA = `PROJECT CONTEXT:
 You are operating within a project folder that contains a collection of legal documents the user has organised for a single matter. The user's questions will usually refer to one or more documents in this project — your job is to find the relevant files to work on. Use list_documents to see what is available and fetch_documents / read_document to pull in any documents you need before answering.
@@ -29,13 +33,14 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     const userId = res.locals.userId as string;
     const userEmail = res.locals.userEmail as string | undefined;
     const { projectId } = req.params;
-    const { messages, chat_id, model, displayed_doc, attached_documents } =
+    const { messages, chat_id, model, displayed_doc, attached_documents, enable_thinking } =
         req.body as {
             messages: ChatMessage[];
             chat_id?: string;
             model?: string;
             displayed_doc?: { filename: string; document_id: string };
             attached_documents?: { filename: string; document_id: string }[];
+            enable_thinking?: boolean;
         };
 
     const db = createServerSupabase();
@@ -169,15 +174,56 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
             model,
             apiKeys,
             projectId,
+            enableThinking: enable_thinking ?? false,
         });
 
         const annotations = extractAnnotations(fullText, docIndex, events);
-        await db.from("chat_messages").insert({
-            chat_id: chatId,
-            role: "assistant",
-            content: events.length ? events : null,
-            annotations: annotations.length ? annotations : null,
-        });
+        const { data: insertedMsg } = await db
+            .from("chat_messages")
+            .insert({
+                chat_id: chatId,
+                role: "assistant",
+                content: events.length ? events : null,
+                annotations: annotations.length ? annotations : null,
+            })
+            .select("id")
+            .single();
+        const insertedMessageId = (insertedMsg?.id as string | undefined) ?? null;
+
+        if (
+            process.env.PROBE_API_URL &&
+            fullText &&
+            insertedMessageId
+        ) {
+            const probeMessages: ProbeMessage[] = [
+                ...(apiMessages as { role: string; content: string | null }[])
+                    .filter((m) => m.content)
+                    .map((m) => ({
+                        role:
+                            m.role === "system"
+                                ? ("system" as const)
+                                : m.role === "assistant"
+                                  ? ("assistant" as const)
+                                  : ("user" as const),
+                        content: m.content as string,
+                    })),
+                { role: "assistant", content: fullText },
+            ];
+            const result = await streamScoreMessages({
+                messages: probeMessages,
+                onScore: (e) => {
+                    write(
+                        `data: ${JSON.stringify({ type: "assistant_score_update", message_id: insertedMessageId, scores: e.scores })}\n\n`,
+                    );
+                },
+            });
+            if (result) {
+                await db
+                    .from("chat_messages")
+                    .update({ probe_scores: result.scores })
+                    .eq("id", insertedMessageId);
+            }
+        }
 
         if (!chatTitle && lastUser?.content) {
             await db

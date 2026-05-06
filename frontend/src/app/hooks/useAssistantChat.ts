@@ -331,12 +331,14 @@ export function useAssistantChat({
                 document_id: f.document_id as string,
             }));
 
+            const enableThinking = message.enableThinking ?? false;
             const response = await (projectId
                 ? streamProjectChat({
                       projectId,
                       messages: apiMessages,
                       chat_id: chatId,
                       model,
+                      enable_thinking: enableThinking,
                       displayed_doc: displayedDoc
                           ? {
                                 filename: displayedDoc.filename,
@@ -351,6 +353,7 @@ export function useAssistantChat({
                       messages: apiMessages,
                       chat_id: chatId,
                       model,
+                      enable_thinking: enableThinking,
                       signal: controller.signal,
                   }));
 
@@ -753,6 +756,35 @@ export function useAssistantChat({
                                 }),
                             );
                             pushThinkingPlaceholder();
+                            continue;
+                        }
+
+                        if (data.type === "assistant_score_update") {
+                            const incoming = data.scores as
+                                | Record<string, number>
+                                | undefined;
+                            if (!incoming) continue;
+                            setMessages((prev) => {
+                                const updated = [...prev];
+                                const last = updated[updated.length - 1];
+                                if (last?.role !== "assistant") return prev;
+                                const next: Record<string, number[]> = {
+                                    ...(last.probe_scores ?? {}),
+                                };
+                                for (const [name, value] of Object.entries(
+                                    incoming,
+                                )) {
+                                    next[name] = [
+                                        ...(next[name] ?? []),
+                                        value as number,
+                                    ];
+                                }
+                                updated[updated.length - 1] = {
+                                    ...last,
+                                    probe_scores: next,
+                                };
+                                return updated;
+                            });
                             continue;
                         }
 
