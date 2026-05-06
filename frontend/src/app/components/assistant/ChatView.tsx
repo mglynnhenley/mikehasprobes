@@ -543,6 +543,7 @@ export function ChatView({
                                                 resolvedEditStatuses={
                                                     resolvedEditStatuses
                                                 }
+                                                probeScores={msg.probe_scores}
                                             />
                                         )}
                                     </div>

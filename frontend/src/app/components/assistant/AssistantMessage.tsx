@@ -16,6 +16,7 @@ import type {
 } from "../shared/types";
 import { EditCard, applyOptimisticResolution } from "./EditCard";
 import { PreResponseWrapper } from "../shared/PreResponseWrapper";
+import { HighlightedSummary } from "../tabular/HighlightedSummary";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -1052,6 +1053,12 @@ interface Props {
      * edits flip their per-card UI without per-card clicks.
      */
     resolvedEditStatuses?: Record<string, "accepted" | "rejected">;
+    /**
+     * Per-token hallucination probe scores for this message, keyed by probe
+     * name. Streamed in after the assistant turn finishes; rendered as a
+     * heat strip beneath the response.
+     */
+    probeScores?: Record<string, number[]> | null;
 }
 
 export function AssistantMessage({
@@ -1072,6 +1079,7 @@ export function AssistantMessage({
     isDocReloading,
     isEditReloading,
     resolvedEditStatuses,
+    probeScores,
 }: Props) {
     const messageKey = useId();
     const contentDivRef = useRef<HTMLDivElement | null>(null);
@@ -1600,6 +1608,10 @@ export function AssistantMessage({
                             })}
                         </div>
                     )}
+
+                {!isStreaming && probeScores && (
+                    <HighlightedSummary scores={probeScores} />
+                )}
 
                 {/* Copy button */}
                 <div className="flex items-center gap-2 pt-2 pb-4 md:pb-8 font-sans justify-start">

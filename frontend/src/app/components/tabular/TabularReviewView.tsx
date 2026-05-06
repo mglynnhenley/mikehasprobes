@@ -315,6 +315,33 @@ export function TRView({ reviewId, projectId }: Props) {
                                         : c,
                                 ),
                             );
+                        } else if (data.type === "cell_score_update") {
+                            setCells((prev) =>
+                                prev.map((c) => {
+                                    if (
+                                        c.document_id !== data.document_id ||
+                                        c.column_index !== data.column_index
+                                    ) {
+                                        return c;
+                                    }
+                                    const next: Record<string, number[]> = {
+                                        ...(c.probe_scores ?? {}),
+                                    };
+                                    for (const [name, value] of Object.entries(
+                                        (data.scores ?? {}) as Record<
+                                            string,
+                                            number
+                                        >,
+                                    )) {
+                                        (next[name] ??= []).push(value);
+                                    }
+                                    return {
+                                        ...c,
+                                        probe_scores: next,
+                                        probe_status: "scoring",
+                                    };
+                                }),
+                            );
                         }
                     } catch {}
                 }

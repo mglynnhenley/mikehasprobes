@@ -148,10 +148,14 @@ export interface MikeMessage {
   files?: { filename: string; document_id?: string }[];
   workflow?: { id: string; title: string };
   model?: string;
+  /** Send-time toggle: enable provider-side reasoning for this turn. */
+  enableThinking?: boolean;
   annotations?: MikeCitationAnnotation[];
   events?: AssistantEvent[];
   /** Set when streaming failed; rendered as a red error block. */
   error?: string;
+  /** Per-token hallucination probe scores keyed by probe name. */
+  probe_scores?: Record<string, number[]> | null;
 }
 
 export interface CitationQuote {
@@ -267,6 +271,8 @@ export interface TabularCell {
     reasoning?: string;
   } | null;
   status: "pending" | "generating" | "done" | "error";
+  probe_scores?: Record<string, number[]> | null;
+  probe_status?: "scoring" | "scored" | "skipped" | null;
   created_at: string;
 }
 

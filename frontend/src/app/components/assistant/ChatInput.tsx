@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
     ArrowRight,
+    Brain,
     Check,
     File,
     FileText,
@@ -23,6 +24,7 @@ import { AssistantWorkflowModal } from "./AssistantWorkflowModal";
 import { ApiKeyMissingModal } from "../shared/ApiKeyMissingModal";
 import { ModelToggle } from "./ModelToggle";
 import { useSelectedModel } from "@/app/hooks/useSelectedModel";
+import { useThinkingMode } from "@/app/hooks/useThinkingMode";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import {
     getModelProvider,
@@ -66,6 +68,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
         title: string;
     } | null>(null);
     const [model, setModel] = useSelectedModel();
+    const [enableThinking, setEnableThinking] = useThinkingMode();
     const { profile } = useUserProfile();
     const apiKeys = {
         claudeApiKey: profile?.claudeApiKey ?? null,
@@ -139,6 +142,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             files: files.length > 0 ? files : undefined,
             workflow: wf ?? undefined,
             model,
+            enableThinking,
         });
     };
 
@@ -274,6 +278,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                         </div>
 
                         <div className="flex items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={() => setEnableThinking(!enableThinking)}
+                                title={enableThinking ? "Thinking mode on" : "Thinking mode off"}
+                                aria-pressed={enableThinking}
+                                className={`flex items-center gap-1 rounded-lg px-2 h-8 text-sm transition-colors cursor-pointer ${enableThinking ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "text-gray-400 hover:bg-gray-100 hover:text-gray-700"}`}
+                            >
+                                <Brain className="h-3.5 w-3.5 shrink-0" />
+                                <span>Think</span>
+                            </button>
                             <ModelToggle
                                 value={model}
                                 onChange={setModel}

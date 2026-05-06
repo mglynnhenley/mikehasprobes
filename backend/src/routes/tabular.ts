@@ -17,6 +17,7 @@ import {
     ensureReviewAccess,
     listAccessibleProjectIds,
 } from "../lib/access";
+import { streamScoreCompletion } from "../lib/probe/scorer";
 
 function formatPromptSuffix(format?: string, tags?: string[]): string {
     switch (format) {
@@ -844,6 +845,7 @@ tabularRouter.post("/:reviewId/generate", requireAuth, async (req, res) => {
 
                 // Single LLM call for all columns, streaming one JSON line per column
                 const receivedColumns = new Set<number>();
+                const scoreTasks: Promise<unknown>[] = [];
                 try {
                     await queryGeminiAllColumns(
                         tabular_model,
@@ -864,6 +866,24 @@ tabularRouter.post("/:reviewId/generate", requireAuth, async (req, res) => {
                             write(
                                 `data: ${JSON.stringify({ type: "cell_update", document_id: docId, column_index: columnIndex, content: result, status: "done" })}\n\n`,
                             );
+                            const col = columnsToProcess.find(
+                                (c) => c.index === columnIndex,
+                            );
+                            if (col && process.env.PROBE_API_URL) {
+                                scoreTasks.push(
+                                    scoreCell({
+                                        db,
+                                        write,
+                                        reviewId,
+                                        docId,
+                                        columnIndex,
+                                        filename,
+                                        markdown,
+                                        column: col,
+                                        summary: result.summary,
+                                    }),
+                                );
+                            }
                         },
                         api_keys,
                     );
@@ -873,6 +893,7 @@ tabularRouter.post("/:reviewId/generate", requireAuth, async (req, res) => {
                         err,
                     );
                 }
+                await Promise.all(scoreTasks);
 
                 // Mark any columns the LLM didn't return as error
                 for (const col of columnsToProcess) {
@@ -1495,6 +1516,48 @@ type Column = {
     format?: string;
     tags?: string[];
 };
+
+async function scoreCell(opts: {
+    db: ReturnType<typeof createServerSupabase>;
+    write: (line: string) => void;
+    reviewId: string;
+    docId: string;
+    columnIndex: number;
+    filename: string;
+    markdown: string;
+    column: Column;
+    summary: string;
+}): Promise<void> {
+    const setStatus = (probe_status: string, probe_scores?: unknown) =>
+        opts.db
+            .from("tabular_cells")
+            .update(
+                probe_scores !== undefined
+                    ? { probe_status, probe_scores }
+                    : { probe_status },
+            )
+            .eq("review_id", opts.reviewId)
+            .eq("document_id", opts.docId)
+            .eq("column_index", opts.columnIndex);
+
+    await setStatus("scoring");
+    const prompt = `Document: ${opts.filename}\n\n${opts.markdown.slice(0, 120_000)}\n\n---\nColumn: ${opts.column.prompt}`;
+    const result = await streamScoreCompletion({
+        prompt,
+        completion: opts.summary,
+        onScore: (e) => {
+            opts.write(
+                `data: ${JSON.stringify({ type: "cell_score_update", document_id: opts.docId, column_index: opts.columnIndex, scores: e.scores })}\n\n`,
+            );
+        },
+    });
+
+    if (result) {
+        await setStatus("scored", result.scores);
+    } else {
+        await setStatus("skipped");
+    }
+}
 
 async function queryGeminiAllColumns(
     model: string,
