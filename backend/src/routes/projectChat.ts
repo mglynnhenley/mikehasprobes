@@ -190,6 +190,8 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
             .single();
         const insertedMessageId = (insertedMsg?.id as string | undefined) ?? null;
 
+        write(`data: ${JSON.stringify({ type: "content_done" })}\n\n`);
+
         if (
             process.env.PROBE_API_URL &&
             fullText &&
@@ -209,14 +211,19 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
                     })),
                 { role: "assistant", content: fullText },
             ];
+            let scoreEventCount = 0;
             const result = await streamScoreMessages({
                 messages: probeMessages,
                 onScore: (e) => {
+                    scoreEventCount++;
                     write(
                         `data: ${JSON.stringify({ type: "assistant_score_update", message_id: insertedMessageId, scores: e.scores })}\n\n`,
                     );
                 },
             });
+            console.log(
+                `[probe] sent ${scoreEventCount} assistant_score_update events for ${insertedMessageId}`,
+            );
             if (result) {
                 await db
                     .from("chat_messages")

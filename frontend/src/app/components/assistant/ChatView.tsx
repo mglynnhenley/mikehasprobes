@@ -17,6 +17,7 @@ import type {
 } from "../shared/types";
 import { useSidebar } from "@/app/contexts/SidebarContext";
 import { invalidateDocxBytes } from "@/app/hooks/useFetchDocxBytes";
+import { useProbeThreshold } from "@/app/hooks/useProbeThreshold";
 
 interface Props {
     messages: MikeMessage[];
@@ -47,6 +48,13 @@ export function ChatView({
     // (and their twins in DocPanel) stay clickable.
     const [reloadingEditIds, setReloadingEditIds] = useState<Set<string>>(
         () => new Set(),
+    );
+    const [probeThreshold, setProbeThreshold] = useProbeThreshold();
+    const messagesHaveScores = messages.some(
+        (m) =>
+            m.role === "assistant" &&
+            m.probe_scores &&
+            Object.values(m.probe_scores).some((arr) => arr && arr.length > 0),
     );
     const { setSidebarOpen } = useSidebar();
 
@@ -447,6 +455,27 @@ export function ChatView({
         <div className="h-full w-full flex relative">
             {/* Chat column */}
             <div className="flex flex-col h-full flex-1 relative">
+                {messagesHaveScores && (
+                    <div className="sticky top-0 z-10 flex items-center justify-end gap-2 px-6 md:px-8 py-2 bg-white/90 backdrop-blur-sm border-b border-gray-100 text-xs text-gray-500">
+                        <span title="Tokens with scores at or below this value are shown without a highlight.">
+                            Highlight threshold
+                        </span>
+                        <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={probeThreshold}
+                            onChange={(e) =>
+                                setProbeThreshold(parseFloat(e.target.value))
+                            }
+                            className="w-32 accent-red-500"
+                        />
+                        <span className="tabular-nums w-10 text-right">
+                            {probeThreshold.toFixed(2)}
+                        </span>
+                    </div>
+                )}
                 {/* Scrollable messages */}
                 <div
                     ref={messagesContainerRef}
@@ -544,6 +573,7 @@ export function ChatView({
                                                     resolvedEditStatuses
                                                 }
                                                 probeScores={msg.probe_scores}
+                                                probeThreshold={probeThreshold}
                                             />
                                         )}
                                     </div>

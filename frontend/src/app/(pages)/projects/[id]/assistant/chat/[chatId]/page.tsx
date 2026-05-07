@@ -1189,6 +1189,7 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                                             }
                                             isError={!!(msg as any).error}
                                             annotations={msg.annotations}
+                                            probeScores={msg.probe_scores}
                                             onCitationClick={
                                                 handleCitationClick
                                             }

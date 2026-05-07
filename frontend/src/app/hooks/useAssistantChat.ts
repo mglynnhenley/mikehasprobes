@@ -395,6 +395,10 @@ export function useAssistantChat({
 
                         if (data.type === "content_done") {
                             setIsLoadingCitations(true);
+                            // Drop the spinner — the assistant text is final.
+                            // Probe scores still stream in over the same SSE
+                            // channel and fade the heat strip in afterward.
+                            setIsResponseLoading(false);
                             continue;
                         }
 
@@ -763,6 +767,7 @@ export function useAssistantChat({
                             const incoming = data.scores as
                                 | Record<string, number>
                                 | undefined;
+                            console.log("[probe] score update", incoming);
                             if (!incoming) continue;
                             setMessages((prev) => {
                                 const updated = [...prev];

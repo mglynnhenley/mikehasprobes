@@ -255,7 +255,10 @@ export function TabularCell({
                             onCitationClick={handleCitationClickInOverlay}
                             onExpand={handleSeeDetails}
                         />
-                        <HighlightedSummary scores={cell.probe_scores} />
+                        <HighlightedSummary
+                            text={cell.content.summary}
+                            scores={cell.probe_scores}
+                        />
                     </div>
                     <div className="px-2 py-1.5 flex items-center justify-end">
                         <button

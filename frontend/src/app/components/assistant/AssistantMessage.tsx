@@ -1059,10 +1059,12 @@ interface Props {
      * heat strip beneath the response.
      */
     probeScores?: Record<string, number[]> | null;
+    /** Score threshold below which highlights are hidden. Defaults to 0.3. */
+    probeThreshold?: number;
 }
 
 export function AssistantMessage({
-    content: _content,
+    content,
     events,
     isStreaming = false,
     isError = false,
@@ -1080,6 +1082,7 @@ export function AssistantMessage({
     isEditReloading,
     resolvedEditStatuses,
     probeScores,
+    probeThreshold,
 }: Props) {
     const messageKey = useId();
     const contentDivRef = useRef<HTMLDivElement | null>(null);
@@ -1214,6 +1217,38 @@ export function AssistantMessage({
         if (event.type === "content") {
             const isLastContent = globalIdx === lastContentIdx;
             const processed = processedTexts[globalIdx];
+
+            // When probe scores are present we render the assistant text
+            // with score-colored backgrounds inline. Scores are aligned
+            // to the entire assistant turn, so we draw the highlighted
+            // block once on the last content event and suppress earlier
+            // content events to avoid duplicate text. Derive the highlight
+            // text from accumulated content events (the prop `content` is
+            // empty during live streams — it only gets populated when a
+            // chat is reloaded from the DB).
+            const highlightText =
+                content ||
+                (events ?? [])
+                    .filter((e) => e.type === "content")
+                    .map((e) => (e as { type: "content"; text: string }).text)
+                    .join("");
+            if (probeScores && highlightText) {
+                if (!isLastContent) return null;
+                return (
+                    <div
+                        key={globalIdx}
+                        ref={contentDivRef}
+                        className="text-gray-900 mb-4 text-base font-serif leading-relaxed"
+                    >
+                        <HighlightedSummary
+                            text={highlightText}
+                            scores={probeScores}
+                            threshold={probeThreshold}
+                        />
+                    </div>
+                );
+            }
+
             return (
                 <div key={globalIdx}>
                     <MarkdownContent
@@ -1357,6 +1392,36 @@ export function AssistantMessage({
                             if (g.kind === "content") {
                                 const isLastContent =
                                     g.index === lastContentIdx;
+                                if (probeScores && !isStreaming) {
+                                    if (!isLastContent) return null;
+                                    const highlightText =
+                                        content ||
+                                        events
+                                            .filter((e) => e.type === "content")
+                                            .map(
+                                                (e) =>
+                                                    (
+                                                        e as {
+                                                            type: "content";
+                                                            text: string;
+                                                        }
+                                                    ).text,
+                                            )
+                                            .join("");
+                                    return (
+                                        <div
+                                            key={`c-${g.index}`}
+                                            ref={contentDivRef}
+                                            className="text-gray-900 text-base font-serif leading-relaxed"
+                                        >
+                                            <HighlightedSummary
+                                                text={highlightText}
+                                                scores={probeScores}
+                                                threshold={probeThreshold}
+                                            />
+                                        </div>
+                                    );
+                                }
                                 return (
                                     <div key={`c-${g.index}`}>
                                         <MarkdownContent
@@ -1609,9 +1674,6 @@ export function AssistantMessage({
                         </div>
                     )}
 
-                {!isStreaming && probeScores && (
-                    <HighlightedSummary scores={probeScores} />
-                )}
 
                 {/* Copy button */}
                 <div className="flex items-center gap-2 pt-2 pb-4 md:pb-8 font-sans justify-start">

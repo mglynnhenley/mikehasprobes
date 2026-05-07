@@ -27,6 +27,7 @@ interface ServerMessage {
     files?: { filename: string; document_id?: string }[] | null;
     workflow?: { id: string; title: string } | null;
     annotations?: MikeCitationAnnotation[] | null;
+    probe_scores?: Record<string, number[]> | null;
     created_at: string;
 }
 interface ServerChatDetailOut {
@@ -392,6 +393,7 @@ export async function getChat(chatId: string): Promise<MikeChatDetailOut> {
                     .join("") ?? "",
             annotations: m.annotations ?? undefined,
             events,
+            probe_scores: m.probe_scores ?? null,
         };
     });
     return { chat: raw.chat, messages };
