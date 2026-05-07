@@ -38,13 +38,15 @@ function client(): OpenAI {
 }
 
 /**
- * Score the prefilled assistant turn through the probe service via the
- * standard `/v1/chat/completions` endpoint. Returns one score per token of
- * the trailing assistant message.
+ * Score the prefilled assistant turn through the probe service.
+ * Uses the `*-analyze` model variant (e.g. `default-analyze`) which surfaces
+ * activations captured during prefill — the plain model only scores
+ * generated tokens. Returns one score per token of the trailing assistant
+ * message.
  *
- * The response is non-streaming. We still surface a per-token `onScore`
- * callback so the SSE animation in the UI works the same way it does for
- * the mock probe.
+ * The analyze pass runs as a single forward pass; the response is non-streaming.
+ * We still surface a per-token `onScore` callback so the SSE animation in the
+ * UI works the same way it does for the mock probe.
  */
 export async function streamScoreMessages(
     params: StreamScoreMessagesParams,
@@ -58,8 +60,8 @@ export async function streamScoreMessages(
         return null;
     }
 
-    const model = params.model ?? process.env.PROBE_MODEL ?? "default";
-    console.log(`[probe] score start model=${model} msgs=${params.messages.length}`);
+    const model = params.model ?? process.env.PROBE_MODEL ?? "default-analyze";
+    console.log(`[probe] analyze start model=${model} msgs=${params.messages.length}`);
     const t0 = Date.now();
     try {
         const body = {
@@ -78,7 +80,7 @@ export async function streamScoreMessages(
         const counts = Object.fromEntries(
             Object.entries(scores).map(([k, v]) => [k, Array.isArray(v) ? v.length : 0]),
         );
-        console.log(`[probe] score done in ${Date.now() - t0}ms scores=`, counts);
+        console.log(`[probe] analyze done in ${Date.now() - t0}ms scores=`, counts);
         for (const [name, arr] of Object.entries(scores)) {
             if (!Array.isArray(arr)) continue;
             for (const value of arr) {
@@ -87,7 +89,7 @@ export async function streamScoreMessages(
         }
         return { scores };
     } catch (err) {
-        console.error(`[probe] score failed after ${Date.now() - t0}ms:`, err);
+        console.error(`[probe] analyze failed after ${Date.now() - t0}ms:`, err);
         return null;
     }
 }

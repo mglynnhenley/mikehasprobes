@@ -29,24 +29,12 @@ function tokenColor(score: number, threshold: number): string {
  * position: char `c` of `T` total maps to `scores[floor(c * N / T)]`.
  */
 export function HighlightedSummary({ text, scores, probeName, threshold = 0.3 }: Props) {
-    console.log("[HighlightedSummary] render", {
-        textLen: text?.length,
-        hasScores: !!scores,
-        scoreKeys: scores ? Object.keys(scores) : [],
-        threshold,
-    });
     if (!text || !scores) return null;
     const series =
         (probeName && scores[probeName]) ??
         Object.values(scores)[0] ??
         null;
     if (!series || !series.length) return null;
-    console.log("[HighlightedSummary] series", {
-        length: series.length,
-        min: Math.min(...series),
-        max: Math.max(...series),
-        avg: series.reduce((a, b) => a + b, 0) / series.length,
-    });
 
     const N = series.length;
     const T = text.length;
